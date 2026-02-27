@@ -1,231 +1,214 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bengali Class VIII Quiz</title>
+<title>Smart QR Attendance</title>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 
 <style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Segoe UI;}
+
 body{
-    margin:0;
-    font-family:sans-serif;
-    background:linear-gradient(135deg,#6a11cb,#2575fc);
-    display:flex;
-    justify-content:center;
-    padding:20px;
+  background:linear-gradient(135deg,#4e73df,#1cc88a);
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
 }
 
-.container{
-    background:#fff;
-    width:100%;
-    max-width:700px;
-    padding:20px;
-    border-radius:12px;
+.app{
+  width:95%;
+  max-width:420px;
+  background:white;
+  border-radius:25px;
+  padding:20px;
+  box-shadow:0 15px 35px rgba(0,0,0,0.3);
 }
 
-.hidden{display:none;}
+.header{
+  text-align:center;
+  margin-bottom:10px;
+}
 
-input{
-    width:100%;
-    padding:10px;
-    margin:5px 0 15px;
+.header h2{
+  color:#333;
+}
+
+.counter{
+  background:#4e73df;
+  color:white;
+  padding:10px;
+  border-radius:10px;
+  margin:10px 0;
+  text-align:center;
+  font-weight:bold;
+}
+
+#reader{
+  width:100%;
+  margin-top:10px;
+}
+
+.result{
+  margin-top:15px;
+  padding:12px;
+  border-radius:10px;
+  font-weight:bold;
+  display:none;
+  text-align:center;
+}
+
+.success{
+  background:#d4edda;
+  color:#155724;
+}
+
+.error{
+  background:#f8d7da;
+  color:#721c24;
 }
 
 button{
-    padding:10px;
-    background:#4CAF50;
-    color:#fff;
-    border:none;
-    border-radius:6px;
-    cursor:pointer;
-    margin-top:10px;
-}
-
-.option{
-    background:#e8f0fe;
-    padding:10px;
-    margin-bottom:10px;
-    border-radius:8px;
-    cursor:pointer;
-}
-
-.option:hover{
-    background:#d0e2ff;
-}
-
-.result-box{
-    background:#f5f5f5;
-    padding:15px;
-    border-radius:8px;
+  margin-top:15px;
+  width:100%;
+  padding:10px;
+  border:none;
+  border-radius:10px;
+  background:#f6c23e;
+  font-weight:bold;
 }
 </style>
 </head>
 
 <body>
 
-<div class="container">
+<div class="app">
 
-<!-- Start Screen -->
-<div id="start-screen">
-<h2>FULBARI AMINIA HIGH MADRASAH (H.S)</h2>
-<h3>CLASS VIII | SUBJECT: BENGALI</h3>
-
-<label>শিক্ষার্থীর নাম</label>
-<input type="text" id="student-name">
-
-<label>রোল নম্বর</label>
-<input type="number" id="roll-number">
-
-<button id="start-btn">কুইজ শুরু করুন</button>
+<div class="header">
+  <h2> Smart QR Attendance</h2>
 </div>
 
-<!-- Quiz Screen -->
-<div id="quiz-screen" class="hidden">
-<h3 id="question-number"></h3>
-<p id="question-text"></p>
-<div id="options"></div>
+<div class="counter">
+  Present Today: <span id="presentCount">0</span>
 </div>
 
-<!-- Result Screen -->
-<div id="result-screen" class="hidden">
-<h2>ফলাফল</h2>
-<div class="result-box">
-<p id="student-info"></p>
-<p id="score-info"></p>
-<p id="grade-info"></p>
-</div>
-</div>
+<div id="reader"></div>
+
+<div id="result" class="result"></div>
+
+<button onclick="openSheet()"> View Attendance Sheet</button>
 
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", function(){
 
-const questions = [
+const scriptURL = "https://script.google.com/macros/s/AKfycbx23X1Mxc2X5nOSxoOxT835Y0iZ5jSZcE47cfdSkoZI8RbEE13W1feVq02FKkpxdwOv/exec";
+const sheetURL = "https://docs.google.com/spreadsheets/d/1s892prc1DYg6xOEJviowy7gx16r4K4q_Tho7K5L0N04/edit?gid=0#gid=0";
 
-{question:"এজিদের সৈন্যবাহিনী কোন নগরে প্রবেশ করলে মদিনাবাসী এজিদের বিরুদ্ধে জেহাদ ঘোষণা করে?",
-options:["মক্কা","বসরা","মদিনা","কুফা"], answer:"মদিনা"},
+let presentCount = 0;
+let scanning = true;
 
-{question:"এলাহি ___ প্রাণরক্ষা করো।", options:["আমার","হোসেনের","হাসানের","মদিনাবাসীদের"], answer:"হাসানের"},
+const resultBox = document.getElementById("result");
+const counter = document.getElementById("presentCount");
 
-{question:"আমি ___ সান্ত্বনা করিয়া আসিতেছি।", options:["পুরুষগণকে","স্ত্রীগণকে","অবলাগণকে","দুর্বলগণকে"], answer:"অবলাগণকে"},
+function showMessage(msg,type){
+  resultBox.innerText = msg;
+  resultBox.className = "result " + type;
+  resultBox.style.display = "block";
 
-{question:"এই ___ সময়ে তোমরা এ বেশে কোথা যাইতেছ?", options:["আনন্দময়","বিপদ","উৎসব","সাধারণ"], answer:"বিপদ"},
-
-{question:"এই হস্ত ___ মস্তক চূর্ণ করিতে সক্ষম।", options:["মিত্রের","শক্রর","স্বজনের","বিধর্মীর"], answer:"বিধর্মীর"},
-
-{question:"মীর মশাররফ হোসেনের বিখ্যাত গ্রন্থ কোনটি?", options:["সাজাহান","বিষাদ-সিন্ধু","আনন্দ-নগরী","জমিদার দর্পণ"], answer:"বিষাদ-সিন্ধু"},
-
-{question:"মদিনা কীসের নাম?", options:["পাহাড়ের","নদীর","নগরীর","গ্রামের"], answer:"নগরীর"},
-
-{question:"নগরবাসীরা আজ কিসে উন্মত্ত?", options:["শত্রুভয়ে","শত্রুবধে","আনন্দ উল্লাসে","বিপ্লবে"], answer:"শত্রুবধে"},
-
-{question:"হাসান কাদের সঙ্গে সমরক্ষেত্রে যেতে মনস্থ করেছিলেন?", options:["হোসেনের সঙ্গে","আবদুর রহমানের সঙ্গে","সকলকে একত্র শ্রেণিবদ্ধ করে","স্ত্রীলোকদের সঙ্গে"], answer:"সকলকে একত্র শ্রেণিবদ্ধ করে"},
-
-{question:"হাসান অশ্রুসংবরণ করতে পারলেন না কী দেখে?", options:["শত্রুদের আক্রমণ","মদিনাবাসীর পলায়ন","অবলাগণের যুদ্ধবেশ","হোসেনের বিপদ"], answer:"অবলাগণের যুদ্ধবেশ"},
-
-{question:"স্ত্রীলোকদের মধ্যে একজন হাসানকে কী বলে সম্বোধন করলেন?", options:["ভাই","হজরত","পুত্র","গুরু"], answer:"হজরত"},
-
-{question:"স্ত্রীলোকেরা কাদের শত্রুমুখে পাঠিয়েছিল?", options:["শুধুমাত্র পুত্রদের","শুধুমাত্র স্বামীদের","শুধুমাত্র ভ্রাতাদের","ভ্রাতা, পুত্র, স্বামী সকলকেই"], answer:"ভ্রাতা, পুত্র, স্বামী সকলকেই"},
-
-{question:"স্ত্রীলোকেরা কেন অস্ত্র গ্রহণ করতে চেয়েছিল?", options:["ব্যক্তিগত প্রতিশোধের জন্য","ধর্মরক্ষা ও জন্মভূমি রক্ষার জন্য","হাসানকে সাহায্য করতে","এজিদের বিরুদ্ধে বিদ্রোহ করতে"], answer:"ধর্মরক্ষা ও জন্মভূমি রক্ষার জন্য"},
-
-{question:"হাসান নারীগণকে যুদ্ধ না করে কী করতে মিনতি করেছিলেন?", options:["ঘরে বসে ঈশ্বরের নিকট প্রার্থনা করতে","অস্ত্র প্রশিক্ষণ নিতে","আহতদের সেবা করতে","খাবার তৈরি করতে"], answer:"ঘরে বসে ঈশ্বরের নিকট প্রার্থনা করতে"},
-
-{question:"'কাফের' শব্দের অর্থ কী?", options:["মুসলমান","অবিশ্বাসী","ধার্মিক","শত্রু"], answer:"অবিশ্বাসী"},
-
-{question:"‘বঙ্গভাষা’ কবিতার কবির নাম কী?", options:["ভারতচন্দ্র","অতুলপ্রসাদ","মধুসূদন দত্ত","রবীন্দ্রনাথ ঠাকুর"], answer:"মধুসূদন দত্ত"},
-
-{question:"‘ভাণ্ডার’ শব্দের অর্থ কী?", options:["গুদাম","পাত্র","জায়গা","ঝুড়ি"], answer:"গুদাম"},
-
-{question:"‘বঙ্গভাষা’ কবিতাটিকে কী বলা হয়?", options:["শোক কবিতা","চতুর্দশপদী কবিতা","গীতি কবিতা","গদ্য কবিতা"], answer:"চতুর্দশপদী কবিতা"},
-
-{question:"মধুসূদন দত্ত কোন ছন্দের প্রবর্তক?", options:["স্বরবৃত্ত","মাত্রাবৃত্ত","অমিত্রাক্ষর","অক্ষরবৃত্ত"], answer:"অমিত্রাক্ষর"},
-
-{question:"কবি প্রথমে কোন ভাষার কাব্যচর্চায় আত্মনিয়োগ করেছিলেন?", options:["ফরাসি","বাংলা","ইংরেজি","ল্যাটিন"], answer:"ইংরেজি"},
-
-{question:"ঈশ্বরচন্দ্র বিদ্যাসাগর কত খ্রিস্টাব্দে জন্মগ্রহণ করেন?", options:["১৮২০","১৮২৯","১৮৩০","১৮৩৯"], answer:"১৮২০"},
-
-{question:"মানুষের বাগযন্ত্রের স্বল্পতম প্রয়াসে একটি শব্দের যতটুকু অংশ উচ্চারিত হয় তাকে কী বলে?", options:["বর্ণ","শব্দ","দল বা অক্ষর","বাক্য"], answer:"দল বা অক্ষর"},
-
-{question:"যে দলের শেষে স্বরধ্বনি থাকে এবং যা টেনে উচ্চারণ করা যায় তাকে কী বলে?", options:["রুদ্ধদল","মুক্তদল","মিশ্রদল","অসম্পূর্ণ দল"], answer:"মুক্তদল"},
-
-{question:"'শরীর > শরীল' এটি কোন ধ্বনি পরিবর্তনের উদাহরণ?", options:["সমীভবন","অভিশ্রুতি","বিষমীভবন","অপিনিহিতি"], answer:"বিষমীভবন"}
-
-];
-
-let current=0;
-let score=0;
-
-const startBtn=document.getElementById("start-btn");
-const startScreen=document.getElementById("start-screen");
-const quizScreen=document.getElementById("quiz-screen");
-const resultScreen=document.getElementById("result-screen");
-
-const questionNumber=document.getElementById("question-number");
-const questionText=document.getElementById("question-text");
-const optionsDiv=document.getElementById("options");
-
-const studentInfo=document.getElementById("student-info");
-const scoreInfo=document.getElementById("score-info");
-const gradeInfo=document.getElementById("grade-info");
-
-startBtn.onclick=function(){
-let name=document.getElementById("student-name").value;
-let roll=document.getElementById("roll-number").value;
-
-if(!name||!roll){
-alert("নাম ও রোল দিন");
-return;
+  setTimeout(()=>{
+    resultBox.style.display = "none";
+  },2000);
 }
 
-startScreen.classList.add("hidden");
-quizScreen.classList.remove("hidden");
-loadQuestion();
-};
-
-function loadQuestion(){
-let q=questions[current];
-questionNumber.textContent="প্রশ্ন "+(current+1)+" / "+questions.length;
-questionText.textContent=q.question;
-optionsDiv.innerHTML="";
-
-q.options.forEach(option=>{
-let div=document.createElement("div");
-div.className="option";
-div.textContent=option;
-div.onclick=function(){
-if(option===q.answer) score++;
-current++;
-if(current<questions.length){
-loadQuestion();
-}else{
-showResult();
-}
-};
-optionsDiv.appendChild(div);
-});
+function playBeep(){
+  const audio = new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg");
+  audio.play();
 }
 
-function showResult(){
-quizScreen.classList.add("hidden");
-resultScreen.classList.remove("hidden");
+function startScanner(){
 
-let percentage=(score/questions.length)*100;
-let grade="F";
+  const html5QrCode = new Html5Qrcode("reader");
 
-if(percentage>=90) grade="A+";
-else if(percentage>=80) grade="A";
-else if(percentage>=70) grade="B";
-else if(percentage>=60) grade="C";
-else if(percentage>=50) grade="D";
+  Html5Qrcode.getCameras().then(devices => {
 
-studentInfo.textContent="মোট প্রশ্ন: "+questions.length;
-scoreInfo.textContent="প্রাপ্ত নম্বর: "+score+" ("+percentage.toFixed(2)+"%)";
-gradeInfo.textContent="গ্রেড: "+grade;
+    if(devices.length > 0){
+
+      const cameraId = devices[0].id;
+
+      html5QrCode.start(
+        cameraId,
+        { fps:10, qrbox:250 },
+        (decodedText)=>{
+
+          if(!scanning) return;
+
+          scanning = false;
+
+          const parts = decodedText.split(",");
+
+          if(parts.length < 3){
+            showMessage("Invalid QR ❌","error");
+            scanning = true;
+            return;
+          }
+
+          const serial = parts[0];
+          const name   = parts[1];
+          const roll   = parts[2];
+
+          fetch(scriptURL,{
+            method:"POST",
+            body:JSON.stringify({
+              serial:serial,
+              name:name,
+              roll:roll
+            })
+          })
+          .then(res=>res.text())
+          .then(data=>{
+
+            playBeep();
+
+            if(data.includes("Marked")){
+              presentCount++;
+              counter.innerText = presentCount;
+              showMessage(data,"success");
+            }else{
+              showMessage(data,"error");
+            }
+
+            setTimeout(()=>{
+              scanning = true;
+            },1500);
+
+          })
+          .catch(()=>{
+            showMessage("Server Error ❌","error");
+            scanning = true;
+          });
+
+        }
+      );
+
+    }else{
+      showMessage("No Camera Found ❌","error");
+    }
+
+  }).catch(err=>{
+    showMessage("Camera Permission Denied ❌","error");
+  });
+
 }
 
-});
+function openSheet(){
+  window.open(sheetURL,"_blank");
+}
+
+window.onload = startScanner;
+
 </script>
 
 </body>
