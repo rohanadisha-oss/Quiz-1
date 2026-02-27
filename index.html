@@ -3,81 +3,138 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smart QR Attendance</title>
+<title>QR Attendance System</title>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:Segoe UI;}
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  font-family:'Segoe UI',sans-serif;
+}
 
 body{
-  background:linear-gradient(135deg,#4e73df,#1cc88a);
+  background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);
   min-height:100vh;
   display:flex;
   justify-content:center;
   align-items:center;
+  color:white;
 }
 
 .app{
   width:95%;
   max-width:420px;
-  background:white;
+  backdrop-filter:blur(15px);
+  background:rgba(255,255,255,0.08);
   border-radius:25px;
   padding:20px;
-  box-shadow:0 15px 35px rgba(0,0,0,0.3);
+  box-shadow:0 20px 40px rgba(0,0,0,0.4);
 }
 
 .header{
   text-align:center;
-  margin-bottom:10px;
+  margin-bottom:15px;
+}
+
+.school-name{
+  font-size:14px;
+  opacity:0.8;
 }
 
 .header h2{
-  color:#333;
+  margin-top:5px;
+  font-weight:600;
 }
 
 .counter{
-  background:#4e73df;
-  color:white;
+  background:linear-gradient(45deg,#00c6ff,#0072ff);
   padding:10px;
-  border-radius:10px;
-  margin:10px 0;
+  border-radius:12px;
   text-align:center;
   font-weight:bold;
+  margin-bottom:15px;
 }
 
-#reader{
+.video-box{
+  position:relative;
+  border-radius:20px;
+  overflow:hidden;
+  border:3px solid rgba(255,255,255,0.2);
+}
+
+video{
   width:100%;
-  margin-top:10px;
+  display:block;
+}
+
+.scan-frame{
+  position:absolute;
+  width:70%;
+  height:70%;
+  border:3px solid #00ffcc;
+  top:15%;
+  left:15%;
+  border-radius:15px;
+}
+
+.scan-line{
+  position:absolute;
+  width:70%;
+  height:3px;
+  background:#00ffcc;
+  left:15%;
+  animation:scan 2s linear infinite;
+}
+
+@keyframes scan{
+  0%{top:15%;}
+  100%{top:85%;}
 }
 
 .result{
   margin-top:15px;
   padding:12px;
-  border-radius:10px;
+  border-radius:12px;
   font-weight:bold;
-  display:none;
   text-align:center;
+  display:none;
+  animation:fadeIn 0.3s ease;
 }
 
 .success{
-  background:#d4edda;
-  color:#155724;
+  background:#00ffcc;
+  color:#003333;
 }
 
 .error{
-  background:#f8d7da;
-  color:#721c24;
+  background:#ff4d4d;
+  color:white;
 }
 
 button{
   margin-top:15px;
   width:100%;
-  padding:10px;
+  padding:12px;
   border:none;
-  border-radius:10px;
-  background:#f6c23e;
+  border-radius:12px;
+  background:linear-gradient(45deg,#f7971e,#ffd200);
   font-weight:bold;
+  font-size:15px;
+}
+
+.footer{
+  margin-top:10px;
+  text-align:center;
+  font-size:12px;
+  opacity:0.7;
+}
+
+@keyframes fadeIn{
+  from{opacity:0; transform:translateY(5px);}
+  to{opacity:1; transform:translateY(0);}
 }
 </style>
 </head>
@@ -87,127 +144,122 @@ button{
 <div class="app">
 
 <div class="header">
-  <h2> Smart QR Attendance</h2>
+  <div class="school-name">Your School Name</div>
+  <h2>QR Attendance System</h2>
 </div>
 
 <div class="counter">
   Present Today: <span id="presentCount">0</span>
 </div>
 
-<div id="reader"></div>
+<div class="video-box">
+  <video id="video" autoplay playsinline></video>
+  <div class="scan-frame"></div>
+  <div class="scan-line"></div>
+</div>
+
+<canvas id="canvas" hidden></canvas>
 
 <div id="result" class="result"></div>
 
-<button onclick="openSheet()"> View Attendance Sheet</button>
+<button onclick="openSheet()">View Attendance Sheet</button>
+
+<div class="footer">
+  Powered by Smart Attendance
+</div>
 
 </div>
 
 <script>
 
 const scriptURL = "https://script.google.com/macros/s/AKfycbx23X1Mxc2X5nOSxoOxT835Y0iZ5jSZcE47cfdSkoZI8RbEE13W1feVq02FKkpxdwOv/exec";
-const sheetURL = "https://docs.google.com/spreadsheets/d/1s892prc1DYg6xOEJviowy7gx16r4K4q_Tho7K5L0N04/edit?gid=0#gid=0";
+const sheetURL = "https://docs.google.com/spreadsheets/d/1s892prc1DYg6xOEJviowy7gx16r4K4q_Tho7K5L0N04/edit";
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const resultBox = document.getElementById("result");
+const counter = document.getElementById("presentCount");
 
 let presentCount = 0;
 let scanning = true;
 
-const resultBox = document.getElementById("result");
-const counter = document.getElementById("presentCount");
+navigator.mediaDevices.getUserMedia({
+  video:{facingMode:"environment"}
+})
+.then(stream=>{
+  video.srcObject = stream;
+  requestAnimationFrame(scanQR);
+})
+.catch(()=>{
+  showMessage("Camera Permission Denied ❌","error");
+});
 
 function showMessage(msg,type){
   resultBox.innerText = msg;
   resultBox.className = "result " + type;
-  resultBox.style.display = "block";
-
-  setTimeout(()=>{
-    resultBox.style.display = "none";
-  },2000);
+  resultBox.style.display="block";
+  setTimeout(()=>{ resultBox.style.display="none"; },2000);
 }
 
-function playBeep(){
-  const audio = new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg");
-  audio.play();
-}
+function scanQR(){
 
-function startScanner(){
+  if(video.readyState === video.HAVE_ENOUGH_DATA && scanning){
 
-  const html5QrCode = new Html5Qrcode("reader");
+    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth;
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
 
-  Html5Qrcode.getCameras().then(devices => {
+    const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
+    const code = jsQR(imageData.data,imageData.width,imageData.height);
 
-    if(devices.length > 0){
+    if(code){
+      scanning = false;
 
-      const cameraId = devices[0].id;
+      const parts = code.data.split(",");
 
-      html5QrCode.start(
-        cameraId,
-        { fps:10, qrbox:250 },
-        (decodedText)=>{
+      if(parts.length<3){
+        showMessage("Invalid QR ❌","error");
+        scanning = true;
+      }else{
 
-          if(!scanning) return;
+        fetch(scriptURL,{
+          method:"POST",
+          body:JSON.stringify({
+            serial:parts[0],
+            name:parts[1],
+            roll:parts[2]
+          })
+        })
+        .then(res=>res.text())
+        .then(data=>{
 
-          scanning = false;
-
-          const parts = decodedText.split(",");
-
-          if(parts.length < 3){
-            showMessage("Invalid QR ❌","error");
-            scanning = true;
-            return;
+          if(data.includes("Marked")){
+            presentCount++;
+            counter.innerText = presentCount;
+            showMessage(data,"success");
+          }else{
+            showMessage(data,"error");
           }
 
-          const serial = parts[0];
-          const name   = parts[1];
-          const roll   = parts[2];
+          setTimeout(()=>{ scanning = true; },1500);
 
-          fetch(scriptURL,{
-            method:"POST",
-            body:JSON.stringify({
-              serial:serial,
-              name:name,
-              roll:roll
-            })
-          })
-          .then(res=>res.text())
-          .then(data=>{
+        })
+        .catch(()=>{
+          showMessage("Server Error ❌","error");
+          scanning = true;
+        });
 
-            playBeep();
-
-            if(data.includes("Marked")){
-              presentCount++;
-              counter.innerText = presentCount;
-              showMessage(data,"success");
-            }else{
-              showMessage(data,"error");
-            }
-
-            setTimeout(()=>{
-              scanning = true;
-            },1500);
-
-          })
-          .catch(()=>{
-            showMessage("Server Error ❌","error");
-            scanning = true;
-          });
-
-        }
-      );
-
-    }else{
-      showMessage("No Camera Found ❌","error");
+      }
     }
+  }
 
-  }).catch(err=>{
-    showMessage("Camera Permission Denied ❌","error");
-  });
-
+  requestAnimationFrame(scanQR);
 }
 
 function openSheet(){
   window.open(sheetURL,"_blank");
 }
-
-window.onload = startScanner;
 
 </script>
 
