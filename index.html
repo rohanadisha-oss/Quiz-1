@@ -3,20 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QR Attendance System</title>
+<title>QR Attendance Pro</title>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
 
 <style>
-*{
-  margin:0;
-  padding:0;
-  box-sizing:border-box;
-  font-family:'Segoe UI',sans-serif;
-}
+*{margin:0;padding:0;box-sizing:border-box;font-family:Segoe UI;}
 
 body{
-  background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+  background:linear-gradient(135deg,#141e30,#243b55);
   min-height:100vh;
   display:flex;
   justify-content:center;
@@ -27,27 +22,14 @@ body{
 .app{
   width:95%;
   max-width:420px;
-  backdrop-filter:blur(15px);
-  background:rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.07);
+  backdrop-filter:blur(12px);
   border-radius:25px;
   padding:20px;
-  box-shadow:0 20px 40px rgba(0,0,0,0.4);
+  box-shadow:0 20px 40px rgba(0,0,0,0.5);
 }
 
-.header{
-  text-align:center;
-  margin-bottom:15px;
-}
-
-.school-name{
-  font-size:14px;
-  opacity:0.8;
-}
-
-.header h2{
-  margin-top:5px;
-  font-weight:600;
-}
+.header{text-align:center;margin-bottom:15px;}
 
 .counter{
   background:linear-gradient(45deg,#00c6ff,#0072ff);
@@ -58,83 +40,31 @@ body{
   margin-bottom:15px;
 }
 
-.video-box{
-  position:relative;
-  border-radius:20px;
-  overflow:hidden;
-  border:3px solid rgba(255,255,255,0.2);
-}
-
 video{
   width:100%;
-  display:block;
-}
-
-.scan-frame{
-  position:absolute;
-  width:70%;
-  height:70%;
-  border:3px solid #00ffcc;
-  top:15%;
-  left:15%;
   border-radius:15px;
-}
-
-.scan-line{
-  position:absolute;
-  width:70%;
-  height:3px;
-  background:#00ffcc;
-  left:15%;
-  animation:scan 2s linear infinite;
-}
-
-@keyframes scan{
-  0%{top:15%;}
-  100%{top:85%;}
 }
 
 .result{
   margin-top:15px;
   padding:12px;
   border-radius:12px;
-  font-weight:bold;
   text-align:center;
   display:none;
-  animation:fadeIn 0.3s ease;
+  font-weight:bold;
 }
 
-.success{
-  background:#00ffcc;
-  color:#003333;
-}
-
-.error{
-  background:#ff4d4d;
-  color:white;
-}
+.success{background:#00ffcc;color:#003333;}
+.error{background:#ff4d4d;color:white;}
 
 button{
-  margin-top:15px;
+  margin-top:10px;
   width:100%;
-  padding:12px;
+  padding:10px;
   border:none;
-  border-radius:12px;
+  border-radius:10px;
   background:linear-gradient(45deg,#f7971e,#ffd200);
   font-weight:bold;
-  font-size:15px;
-}
-
-.footer{
-  margin-top:10px;
-  text-align:center;
-  font-size:12px;
-  opacity:0.7;
-}
-
-@keyframes fadeIn{
-  from{opacity:0; transform:translateY(5px);}
-  to{opacity:1; transform:translateY(0);}
 }
 </style>
 </head>
@@ -144,36 +74,26 @@ button{
 <div class="app">
 
 <div class="header">
-  <div class="school-name">Your School Name</div>
-  <h2>QR Attendance System</h2>
+  <h2>QR Attendance Pro</h2>
 </div>
 
 <div class="counter">
   Present Today: <span id="presentCount">0</span>
 </div>
 
-<div class="video-box">
-  <video id="video" autoplay playsinline></video>
-  <div class="scan-frame"></div>
-  <div class="scan-line"></div>
-</div>
-
+<video id="video" autoplay playsinline></video>
 <canvas id="canvas" hidden></canvas>
 
 <div id="result" class="result"></div>
 
 <button onclick="openSheet()">View Attendance Sheet</button>
 
-<div class="footer">
-  Powered by Smart Attendance
-</div>
-
 </div>
 
 <script>
 
 const scriptURL = "https://script.google.com/macros/s/AKfycbx23X1Mxc2X5nOSxoOxT835Y0iZ5jSZcE47cfdSkoZI8RbEE13W1feVq02FKkpxdwOv/exec";
-const sheetURL = "https://docs.google.com/spreadsheets/d/1s892prc1DYg6xOEJviowy7gx16r4K4q_Tho7K5L0N04/edit";
+const sheetURL  = "https://docs.google.com/spreadsheets/d/1s892prc1DYg6xOEJviowy7gx16r4K4q_Tho7K5L0N04/edit";
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
@@ -183,9 +103,21 @@ const counter = document.getElementById("presentCount");
 
 let presentCount = 0;
 let scanning = true;
+let lastScan = "";
 
+// 🔊 Beep Sound
+function beep(){
+  const audio = new Audio("https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg");
+  audio.play();
+}
+
+// Start Camera (Fast Low Resolution)
 navigator.mediaDevices.getUserMedia({
-  video:{facingMode:"environment"}
+  video:{
+    facingMode:"environment",
+    width:{ideal:480},
+    height:{ideal:360}
+  }
 })
 .then(stream=>{
   video.srcObject = stream;
@@ -199,58 +131,60 @@ function showMessage(msg,type){
   resultBox.innerText = msg;
   resultBox.className = "result " + type;
   resultBox.style.display="block";
-  setTimeout(()=>{ resultBox.style.display="none"; },2000);
+  setTimeout(()=>{resultBox.style.display="none";},1500);
 }
 
 function scanQR(){
 
   if(video.readyState === video.HAVE_ENOUGH_DATA && scanning){
 
-    canvas.height = video.videoHeight;
-    canvas.width = video.videoWidth;
-    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    canvas.width = 320;
+    canvas.height = 240;
 
-    const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
-    const code = jsQR(imageData.data,imageData.width,imageData.height);
+    ctx.drawImage(video,0,0,320,240);
+
+    const imageData = ctx.getImageData(0,0,320,240);
+    const code = jsQR(imageData.data,320,240);
 
     if(code){
+
+      const qrData = code.data;
+
+      // prevent repeat scan within short time
+      if(qrData === lastScan) return;
+
+      lastScan = qrData;
       scanning = false;
 
-      const parts = code.data.split(",");
+      const parts = qrData.split(",");
 
-      if(parts.length<3){
+      if(parts.length < 3){
         showMessage("Invalid QR ❌","error");
         scanning = true;
-      }else{
-
-        fetch(scriptURL,{
-          method:"POST",
-          body:JSON.stringify({
-            serial:parts[0],
-            name:parts[1],
-            roll:parts[2]
-          })
-        })
-        .then(res=>res.text())
-        .then(data=>{
-
-          if(data.includes("Marked")){
-            presentCount++;
-            counter.innerText = presentCount;
-            showMessage(data,"success");
-          }else{
-            showMessage(data,"error");
-          }
-
-          setTimeout(()=>{ scanning = true; },1500);
-
-        })
-        .catch(()=>{
-          showMessage("Server Error ❌","error");
-          scanning = true;
-        });
-
+        return;
       }
+
+      // Send to Apps Script
+      fetch(scriptURL,{
+        method:"POST",
+        mode:"no-cors",
+        body:JSON.stringify({
+          serial:parts[0],
+          name:parts[1],
+          roll:parts[2]
+        })
+      });
+
+      // UI Update (since no-cors won't return response)
+      beep();
+      presentCount++;
+      counter.innerText = presentCount;
+      showMessage("Attendance Sent ✅","success");
+
+      setTimeout(()=>{
+        scanning = true;
+        lastScan = "";
+      },1500);
     }
   }
 
